@@ -1,4 +1,5 @@
 #include <iostream>
+#include "decisionMaker.h"
 
 class PlayerBoard
 {
@@ -8,11 +9,11 @@ public:
 	int board;
 	int rollDice()
 	{
-		int dice = rand() % 6 + 1;
+		short dice = rand() % 6 + 1;
 		return dice;
 	}
 	// returns -1 if column is full, 0 if dice is put in the first row, 1 if dice is put in the second row, 2 if dice is put in the third row
-	void appendDice(int dice, short pos) // pos is 0, 1 or 2
+	void appendDice(short dice, short pos) // pos is 0, 1 or 2
 	{
 		// check if pos has free space
 		short extractedPos = (board >> (pos * 9)) & 0x1FF;
@@ -22,19 +23,19 @@ public:
 		if (extractedPos == 0)
 		{
 			// put dice in the first row of the column
-			board = board | (dice << (pos * 9));
+			board = board | (int)(dice << (pos * 9));
 			//return 0;
 		}
 		else if (extractedPos < 0x8)
 		{
 			// put dice in the second row of the column
-			board = board | (dice << (pos * 9 + 3));
+			board = board | (int)(dice << (pos * 9 + 3));
 			//return 1;
 		}
 		else if (extractedPos < 0x40)
 		{
 			// put dice in the third row of the column
-			board = board | (dice << (pos * 9 + 6));
+			board = board | (int)(dice << (pos * 9 + 6));
 			//return 2;
 		}
 		//else
@@ -108,36 +109,39 @@ public:
 		return score;
 	}
 	// clears the specified column from specified dice and shifts the rest of the dice down
-	void clearColumn(int dice, short pos)
+	void clearColumn(short dice, short pos)
 	{
 		short extractedPos = (board >> (pos * 9)) & 0x1FF;
 		// start from the third row and go up
 		for (int i = 2; i >= 0; i--)
 		{
 			short extractedDice = (extractedPos >> (i * 3)) & 0x7;
-			if (extractedDice == dice)
+
+			if (extractedDice != dice)
 			{
-				// clear the dice
-				extractedPos = extractedPos & ~(0x7 << (i * 3));
-				// shift the rest of the dice down
-				if (i == 2)
-				{
-					// we removed the last dice, so we don't need to shift anything
-					continue;
-				}
-				if (i == 1)
-				{
-					// we removed the second dice, so we need to shift the third dice to the second place
-					// (extractedPos >> 3) is the third dice on second place, since extractedPos second place is 0
-					// we use | to put the third dice on second place
-					// we use & 0x3F to clear the third dice from third place
-					extractedPos = (extractedPos | (extractedPos >> 3)) & 0x3F;
-					continue;
-				}
+				continue;
+			}
+
+			// else, clear the dice
+			extractedPos = extractedPos & ~(0x7 << (i * 3));
+			// shift the rest of the dice down
+			if (i == 1)
+			{
+				// we removed the second dice, so we need to shift the third dice to the second place
+				// (extractedPos >> 3) is the third dice on second place, since extractedPos second place is 0
+				// we use | to put the third dice on second place
+				// we use & 0x3F to clear the third dice from third place
+				extractedPos = (extractedPos | (extractedPos >> 3)) & 0x3F;
+				continue;
+			}
+			if (i == 0)
+			{
 				// if we remove the first dice, we need to shift the third and second dice to second and first place respectively
 				// in fact, we can just shift the whole extractedPos by 3 bits to the right
 				extractedPos = extractedPos >> 3;
 			}
+			//else: that is if (i == 2) we removed the last dice, so we don't need to shift anything
+
 		}
 		// put the new extractedPos back in the board
 		board = board & ~(0x1FF << (pos * 9));
@@ -172,10 +176,14 @@ void printBoard(int board, bool reversed)
 
 int main()
 {
+	// initialize the game
 	PlayerBoard player1;
 	PlayerBoard player2;
 	player1.board = 0;
 	player2.board = 0;
+
+	// decision maker GET RID OF DOUBLING FUNCTION DECLARATION
+	decisionMaker dm{};
 
 	bool player1Turn = true;
 	// game loop
@@ -195,7 +203,7 @@ int main()
 		}
 
 		// roll the dice
-		int dice = currentPlayer->rollDice();
+		short dice = currentPlayer->rollDice();
 		// check current player's possible moves
 		short possibleMoves = currentPlayer->getPossibleMoves();
 
@@ -215,6 +223,10 @@ int main()
 			}
 		}
 		cout << endl;
+
+		// helper
+		cout << "Optimal move: " << dm.makeDecision(currentPlayer->board, otherPlayer->board, dice) + 1 << endl;
+
 
 		short chosenPos;
 		do

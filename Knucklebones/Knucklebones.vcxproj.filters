@@ -18,5 +18,13 @@
     <ClCompile Include="Knucklebones.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="decisionMaker.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="decisionMaker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
