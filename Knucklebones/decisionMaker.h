@@ -16,7 +16,7 @@ public:
 
 
 		// for each iteration
-		for (int _ = 0; _ < 10; _++)
+		for (int _ = 0; _ < 1000; _++)
 		{
 			// 1. Selection
 			node* selectedNode = &root;
@@ -85,7 +85,8 @@ private:
 	{
 		int myBoard;
 		int enemyBoard;
-		short dice;
+		//short dice;
+		char move;
 		bool myTurn;
 	};
 
@@ -94,7 +95,7 @@ private:
 		state value;
 		bool isLeaf;
 		node* parent;
-		node* children[18];
+		node* children[3];
 		short winCount;
 		short simulationCount;
 		short childCount;
