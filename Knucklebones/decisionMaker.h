@@ -1,5 +1,7 @@
 #pragma once
 #include <cmath>
+#include <list>
+#include <iostream>
 
 using namespace std;
 
@@ -12,11 +14,11 @@ public:
 		// https://en.wikipedia.org/wiki/Monte_Carlo_tree_search
 
 		// 0. Initialization
-		node root = { { myBoard, enemyBoard, dice, true }, true, nullptr, {nullptr}, 0, 1, 0 };
-
+		node root = { true, nullptr, {nullptr}, 0, 0, 1, 1 };
+		//std::cout << "Initialiation done\n";
 
 		// for each iteration
-		for (int _ = 0; _ < 1000; _++)
+		for (int _ = 0; _ < 200; _++)
 		{
 			// 1. Selection
 			node* selectedNode = &root;
@@ -24,35 +26,42 @@ public:
 			{
 				selectedNode = selectNode(*selectedNode);
 			}
+			//std::cout << "Selection done in iteration " << _ << "\n";
 
 			// 2. Expansion
 			expandNode(*selectedNode);
+			//std::cout << "Expansion done in iteration " << _ << "\n";
 
 			// 3. Simulation
-			// simulation is done in the expandNode function (the score is calculated there)
-			// the score is just a comparison between the two boards, so it is a number 0 or 1
-			// more advanced simulation can be done here
+			// a number between -1 and 1, -1 means losing, 1 means winning
+			//std::cout << "Simulation started in iteration " << _ << "\n";
+			float winRate = playout(selectedNode, myBoard, enemyBoard, dice, 50); // playout has some problems ://
+			//std::cout << "Simulation done in iteration " << _ << "\n";
 
 			// 4. Backpropagation
 			// update the winRate and simulationCount of the selectedNode and all its parents
+			selectedNode->winCount += winRate;
+			selectedNode->simulationCount++;
 			node* currentNode = selectedNode;
-			while (currentNode != nullptr)
+			while (currentNode->parent != nullptr)
 			{
+				currentNode = currentNode->parent;
 				currentNode->winCount += selectedNode->winCount;
 				currentNode->simulationCount++;
-				currentNode = currentNode->parent;
 			}
+			//std::cout << "Backpropagation done in iteration " << _ << "\n";
 		}
 
 		// 5. Action
 		// select the root's child with the highest winRate
 		// if there are multiple children with the same winRate, select the one with the highest simulationCount
-		short bestChild = 0;
-		short bestWinRate = 0;
+		short bestChild = -1;
+		float bestWinRate = -INFINITY;
 		short bestSimulationCount = 0;
 		// root node has at most 3 children
-		for (short i = 0; i < root.childCount; i++)
+		for (short i = 0; i < 3; i++)
 		{
+			std::cout << "Win rate of child " << i << " is " << root.children[i]->winCount << "\n";
 			if (root.children[i] == nullptr)
 			{
 				// no children
@@ -61,6 +70,7 @@ public:
 
 			if (root.children[i]->winCount > bestWinRate)
 			{
+				std::cout<< "Child " << i << " is better than the previous best child\n";
 				bestChild = i;
 				bestWinRate = root.children[i]->winCount;
 				bestSimulationCount = root.children[i]->simulationCount;
@@ -85,20 +95,18 @@ private:
 	{
 		int myBoard;
 		int enemyBoard;
-		//short dice;
-		char move;
-		bool myTurn;
+		short dice;
 	};
 
 	struct node
 	{
-		state value;
 		bool isLeaf;
 		node* parent;
 		node* children[3];
-		short winCount;
+		float winCount;
 		short simulationCount;
-		short childCount;
+		bool isLeft;
+		bool isRight;
 	};
 
 	// returns 3bit number, 0 bit is the first column, 1 bit is the second column, 2 bit is the third column (bit number = pos)
@@ -242,54 +250,11 @@ private:
 
 	void expandNode(node& nodeExpanded)
 	{
-		// for each possible dice roll, for each possible move, create a child node
-		short possibleMoves = DMgetPossibleMoves(nodeExpanded.value.myBoard);
-		bool myTurn = nodeExpanded.value.myTurn;
-		for (short i = 0; i < 3; i++)
-		{
-			// check if move is possible
-			if ((possibleMoves & (0x1 << i)) == 0)
-			{
-				// move is not possible
-				continue;
-			}
-
-			// if parent == nullptr, then the node is the root node, therefore we know the dice roll (create only 3 children)
-			if (nodeExpanded.parent == nullptr)
-			{
-				// myTurn is true, so the first board is myBoard
-				int firstBoard = DMappendDice(nodeExpanded.value.dice, i, nodeExpanded.value.myBoard);
-				int secondBoard = DMclearColumn(nodeExpanded.value.dice, i, nodeExpanded.value.enemyBoard);
-
-				bool score = DMgetScore(firstBoard) - DMgetScore(secondBoard) > 0 ? 1 : 0;
-				nodeExpanded.children[i] = new node{ { firstBoard, secondBoard, nodeExpanded.value.dice, false }, true, &nodeExpanded, {nullptr}, score, 1, 0 };
-				nodeExpanded.childCount++;
-				nodeExpanded.isLeaf = false;
-				continue;
-			}
-
-			for (short j = 1; j < 7; j++)
-			{
-				// move is possible, perform it for every dice roll
-				int firstBoard = DMappendDice(j, i, myTurn ? nodeExpanded.value.myBoard : nodeExpanded.value.enemyBoard);
-				int secondBoard = DMclearColumn(j, i, myTurn ? nodeExpanded.value.enemyBoard : nodeExpanded.value.myBoard);
-				// if myTurn is true, then the first board is myBoard
-				// else, switch the boards
-				if (myTurn)
-				{
-					bool score = DMgetScore(firstBoard) - DMgetScore(secondBoard) > 0 ? 1 : 0;
-					nodeExpanded.children[i * 6 + j - 1] = new node{ { firstBoard, secondBoard, j, false }, true, &nodeExpanded, {nullptr}, score, 1, 0 };
-				}
-				else
-				{
-					bool score = DMgetScore(secondBoard) - DMgetScore(firstBoard) > 0 ? 1 : 0;
-					nodeExpanded.children[i * 6 + j - 1] = new node{ { secondBoard, firstBoard, j, true }, true, &nodeExpanded, {nullptr}, score, 1, 0 };
-				}
-
-				nodeExpanded.childCount++;
-				nodeExpanded.isLeaf = false;
-			}
-		}
+		// for each possible move, create a child node
+		nodeExpanded.children[0] = new node{ true, &nodeExpanded, {nullptr}, 0, 0, 1, 0 };
+		nodeExpanded.children[1] = new node{ true, &nodeExpanded, {nullptr}, 0, 0, 0, 0 };
+		nodeExpanded.children[2] = new node{ true, &nodeExpanded, {nullptr}, 0, 0, 0, 1 };
+		nodeExpanded.isLeaf = false;
 	}
 
 	node* selectNode(node& parent)
@@ -307,10 +272,10 @@ private:
 		// childSimulationCount is the simulationCount of the child node
 		// if there are multiple children with the same UCT value, select the one with the highest simulationCount
 		short bestChild = 0;
-		float bestUCT = 0;
+		double bestUCT = 0;
 		short bestSimulationCount = 0;
-		// parent node has at most 18 children
-		for (short i = 0; i < parent.childCount; i++)
+		// parent node has 3 children
+		for (short i = 0; i < 3; i++)
 		{
 			if (parent.children[i] == nullptr)
 			{
@@ -319,7 +284,7 @@ private:
 			}
 
 			short childSimulationCount = parent.children[i]->simulationCount;
-			float UCT = (float)(parent.children[i]->winCount / childSimulationCount) + 1.414 * sqrt(log(parent.simulationCount) / childSimulationCount);
+			double UCT = (double)(parent.children[i]->winCount / childSimulationCount) + 1.414 * sqrt(log(parent.simulationCount) / childSimulationCount);
 
 			if (UCT > bestUCT)
 			{
@@ -340,5 +305,109 @@ private:
 
 		// return the selected child
 		return parent.children[bestChild];
+	}
+
+	// return the winRate, if some move is winning, return 1, if some move is losing, return -1, on draw return 0, if a move is invalid, return -1
+	float playout(node* selectedNode, int& myBoard, int& enemyBoard, short inputDice, short iterations)
+	{
+		// get a list of moves
+		list<short> movesList;
+		node* parent = selectedNode->parent;
+		while (parent != nullptr)
+		{
+			if (parent->isLeft)
+			{
+				movesList.push_front(0);
+			}
+			else if (parent->isRight)
+			{
+				movesList.push_front(2);
+			}
+			else
+			{
+				movesList.push_front(1);
+			}
+			parent = parent->parent;
+		}
+
+		float winCount = 0;
+		// for each iteration
+		for (int _ = 0; _ < iterations; _++)
+		{
+			// Copy boards
+			int myBoardCopy = myBoard;
+			int enemyBoardCopy = enemyBoard;
+			short dice = inputDice;
+
+			// for each move in the list, perform the move and perform a random move for the enemy
+			for (auto const& move : movesList)
+			{
+				// check if move is possible
+				short possibleMoves = DMgetPossibleMoves(myBoardCopy);
+				if ((possibleMoves & (1 << move)) == 0)
+				{
+					// move is not possible, add -1 to the winCount of the selectedNode
+					winCount--;
+					break;
+				}
+
+				// move is possible, perform the move
+				DMappendDice(dice, move, myBoardCopy);
+				DMclearColumn(dice, move, enemyBoardCopy);
+				// check if the game is over
+				if (!(DMgetPossibleMoves(myBoardCopy) && DMgetPossibleMoves(enemyBoardCopy)))
+				{
+					// game is over, check if we won
+					if (DMgetScore(myBoardCopy) > DMgetScore(enemyBoardCopy))
+					{
+						// we won, add 1 to the winCount of the selectedNode
+						winCount++;
+					}
+					else if (DMgetScore(myBoardCopy) < DMgetScore(enemyBoardCopy))
+					{
+						// we lost, add -1 to the winCount of the selectedNode
+						winCount--;
+					}
+					// else: draw, do nothing
+					break;
+				}
+
+				// perform a random move for the enemy
+				dice = rand() % 6 + 1;
+				possibleMoves = DMgetPossibleMoves(enemyBoardCopy);
+				short enemyMove = rand() % 3;
+				while ((possibleMoves & (1 << enemyMove)) == 0)
+				{
+					// move is not possible, reroll the move
+					enemyMove = rand() % 3;
+				}
+
+				// move is possible, perform the move
+				DMappendDice(dice, enemyMove, enemyBoardCopy);
+				DMclearColumn(dice, enemyMove, myBoardCopy);
+				// check if the game is over
+				if (!(DMgetPossibleMoves(myBoardCopy) && DMgetPossibleMoves(enemyBoardCopy)))
+				{
+					// game is over, check if we won
+					if (DMgetScore(myBoardCopy) > DMgetScore(enemyBoardCopy))
+					{
+						// we won, add 1 to the winCount of the selectedNode
+						winCount++;
+					}
+					else if (DMgetScore(myBoardCopy) < DMgetScore(enemyBoardCopy))
+					{
+						// we lost, add -1 to the winCount of the selectedNode
+						winCount--;
+					}
+					// else: draw, do nothing
+					break;
+				}
+			}
+			// reroll the dice
+			dice = rand() % 6 + 1;
+		}
+
+		// return the winRate
+		return winCount / iterations;
 	}
 };
